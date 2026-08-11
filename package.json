@@ -1,0 +1,14 @@
+{
+  "name": "fello-customer-verify",
+  "version": "1.0.0",
+  "description": "Fello Customer Verification Tool — Automated email and domain verification for quote requests",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^4.21.0"
+  }
+}

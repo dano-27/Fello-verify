@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Verify — Fello</title>
+  <meta name="description" content="Fello Customer Verification — Automated email and domain verification for quote requests.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="https://events.fello.com/favicon.ico">
+  <meta name="theme-color" content="#232428">
+  <style>
+    :root {
+      --primary: #F7941E;
+      --primary-hover: #e8860f;
+      --primary-light: rgba(247,148,30,0.08);
+      --gold: #FCD230;
+      --gold-light: #FEF5D1;
+      --blue: #3166AE;
+      --blue-light: rgba(49,102,174,0.08);
+      --black: #232428;
+      --white: #fff;
+      --bg: #fafafa;
+      --surface: #fff;
+      --border: rgba(0,0,0,0.06);
+      --border-solid: #e5e5e5;
+      --muted: #636363;
+      --success: #05ac3f;
+      --success-bg: rgba(5,172,63,0.08);
+      --warning: #F59231;
+      --warning-bg: rgba(245,146,49,0.08);
+      --danger: #ff4d41;
+      --danger-bg: rgba(255,77,65,0.08);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 1px 8px rgba(0,0,0,0.04);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: var(--bg);
+      color: var(--black);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    .header {
+      background: rgba(35,36,40,0.97);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .header-logo {
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-brand {
+      display: flex; flex-direction: column; gap: 1px;
+    }
+    .header-title {
+      font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+    }
+    .header-subtitle {
+      font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.5);
+    }
+    .header-badge {
+      margin-left: auto;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid rgba(247,148,30,0.2);
+    }
+
+    /* ── Main ────────────────────────────────────────────────── */
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+      background: linear-gradient(180deg, #FEF7EE 0%, #fafafa 100%);
+      padding: 40px 24px;
+      border-radius: var(--radius);
+    }
+    .hero-inner {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--black);
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .hero p {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* ── Input Box ───────────────────────────────────────────── */
+    .input-box {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border-solid);
+      border-radius: 40px;
+      padding: 6px 6px 6px 20px;
+      box-shadow: var(--shadow);
+      transition: all 0.3s;
+    }
+    .input-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
+    }
+    .input-icon {
+      font-size: 20px;
+      padding: 0 12px 0 0;
+      color: var(--muted);
+    }
+    .input-field {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 15px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--black);
+      padding: 12px 0;
+      outline: none;
+    }
+    .input-field::placeholder { color: #bbb; }
+
+    .btn-verify {
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: 40px;
+      padding: 12px 32px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-verify:hover { background: var(--primary-hover); }
+    .btn-verify:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .spinner {
+      display: none;
+      width: 20px; height: 20px;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      border-top-color: var(--primary);
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    .mock-banner {
+      margin-top: 16px;
+      background: var(--warning-bg);
+      color: #b06b14;
+      border: 1px solid rgba(245,146,49,0.2);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Results ─────────────────────────────────────────────── */
+    .results {
+      animation: slideUp 0.5s cubic-bezier(0.4,0,0.2,1);
+      margin-bottom: 40px;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Score Card */
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+    .score-left { text-align: center; flex-shrink: 0; }
+    .score-gauge {
+      position: relative;
+      width: 120px; height: 120px;
+    }
+    .score-gauge svg { width: 100%; height: 100%; }
+    .score-bg {
+      fill: none;
+      stroke: rgba(0,0,0,0.06);
+      stroke-width: 8;
+    }
+    .score-ring {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 339.292;
+      stroke-dashoffset: 339.292;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1), stroke 0.3s;
+    }
+    .score-num {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--black);
+    }
+    .score-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .score-right { flex: 1; min-width: 0; }
+    .score-email {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--black);
+      margin-bottom: 2px;
+      word-break: break-all;
+    }
+    .score-domain {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .score-time {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 10px;
+    }
+
+    /* Decision Badge */
+    .decision {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .decision-auto_approved { background: var(--success-bg); color: var(--success); }
+    .decision-needs_review { background: var(--warning-bg); color: var(--warning); }
+    .decision-rejected { background: var(--danger-bg); color: var(--danger); }
+
+    /* ── Checks Grid ─────────────────────────────────────────── */
+    .checks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .check-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: slideUp 0.4s cubic-bezier(0.4,0,0.2,1) both;
+    }
+    .check-card:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-lg);
+    }
+    .check-card::before {
+      content: '';
+      display: block;
+      height: 2px;
+    }
+    .check-pass::before { background: var(--success); }
+    .check-warn::before { background: var(--warning); }
+    .check-fail::before { background: var(--danger); }
+    .check-skipped::before, .check-error::before { background: #ccc; }
+
+    .check-head {
+      padding: 16px 18px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .check-icon { font-size: 18px; }
+    .check-name {
+      font-size: 13px;
+      font-weight: 700;
+      flex: 1;
+    }
+    .check-status { font-size: 16px; }
+    .check-body {
+      padding: 14px 18px;
+    }
+    .check-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 12px;
+    }
+    .check-row + .check-row {
+      border-top: 1px solid var(--border);
+    }
+    .check-key {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .check-val {
+      font-weight: 500;
+      text-align: right;
+      color: var(--black);
+    }
+    .check-skip-msg, .check-err-msg {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0;
+      font-style: italic;
+    }
+
+    /* ── Enrichment Card ─────────────────────────────────────── */
+    .enrich-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .enrich-card::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--gold));
+    }
+    .enrich-head {
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .enrich-company {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .enrich-icon {
+      width: 42px; height: 42px;
+      background: var(--primary-light);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .enrich-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--black);
+    }
+    .enrich-desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      max-width: 400px;
+    }
+    .social-links {
+      display: flex;
+      gap: 8px;
+    }
+    .social-link {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .social-link:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: var(--blue-light);
+    }
+    .enrich-fields {
+      padding: 16px 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .enrich-field {}
+    .enrich-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .enrich-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--black);
+    }
+
+    /* ── History ──────────────────────────────────────────────── */
+    .history {
+      margin-top: 48px;
+    }
+    .history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .history-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--black);
+    }
+    .history-count {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      background: rgba(0,0,0,0.04);
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+    .history-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: rgba(247,148,30,0.02); }
+    tr:hover td { background: rgba(247,148,30,0.06); }
+    .td-email {
+      font-weight: 600;
+      color: var(--blue);
+      cursor: pointer;
+    }
+    .td-email:hover { text-decoration: underline; }
+    .td-domain {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .td-score {
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .td-score.s-green { color: var(--success); }
+    .td-score.s-amber { color: var(--warning); }
+    .td-score.s-red { color: var(--danger); }
+    .td-decision {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .td-time {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .td-delete {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0.3;
+      transition: opacity 0.2s;
+      padding: 4px;
+    }
+    .td-delete:hover { opacity: 1; }
+    .empty-row {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── Toast ────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+      pointer-events: none;
+      font-family: inherit;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-success { background: var(--success); }
+    .toast-error { background: var(--danger); }
+
+    .secondary-inputs {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .secondary-input-group {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border-solid);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      transition: border-color 0.2s;
+    }
+    .secondary-input-group:focus-within {
+      border-color: var(--primary);
+    }
+    .secondary-icon {
+      font-size: 14px;
+      margin-right: 8px;
+      color: var(--muted);
+    }
+    .secondary-field {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--black);
+      padding: 6px 0;
+      outline: none;
+    }
+    .secondary-field::placeholder { color: #bbb; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .score-card { flex-direction: column; gap: 24px; text-align: center; }
+      .checks-grid { grid-template-columns: 1fr; }
+      .secondary-inputs { flex-direction: column; }
+      .enrich-fields { grid-template-columns: 1fr 1fr; }
+      .input-box { flex-wrap: wrap; }
+      .btn-verify { width: 100%; margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <img src="https://events.fello.com/_next/static/media/logo.3bfe7774.svg" alt="Fello" style="height:32px;">
+      </div>
+      <div class="header-brand">
+        <div class="header-title">Customer Verify</div>
+        <div class="header-subtitle">Automated Trust Scoring</div>
+      </div>
+      <div class="header-badge" id="mode-badge">Mock Mode</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="hero-inner">
+        <h1>Customer Verification</h1>
+        <p>Enter a customer's email address to verify their business identity, domain legitimacy, and company information before processing a quote request.</p>
+        <div class="input-box">
+          <span class="input-icon">📧</span>
+          <input type="email" id="email-input" class="input-field" placeholder="Customer email address (required)" autocomplete="off" autofocus>
+          <div class="spinner" id="spinner"></div>
+          <button id="verify-btn" class="btn-verify">Verify</button>
+        </div>
+        <div class="secondary-inputs">
+          <div class="secondary-input-group">
+            <span class="secondary-icon">🏢</span>
+            <input type="text" id="company-input" class="secondary-field" placeholder="Company name (optional)" autocomplete="off">
+          </div>
+          <div class="secondary-input-group">
+            <span class="secondary-icon">📞</span>
+            <input type="tel" id="phone-input" class="secondary-field" placeholder="Phone number (optional)" autocomplete="off">
+          </div>
+        </div>
+        <div id="mock-banner" class="mock-banner" style="display:none;">🧪 Running in mock mode — results are simulated. Set API keys in <code>.env</code> for live verification.</div>
+      </div>
+    </div>
+
+    <div id="results" class="results" style="display:none;">
+      <div class="score-card">
+        <div class="score-left">
+          <div class="score-gauge">
+            <svg viewBox="0 0 120 120">
+              <circle class="score-bg" cx="60" cy="60" r="54"></circle>
+              <circle class="score-ring" id="score-ring" cx="60" cy="60" r="54"></circle>
+            </svg>
+            <div class="score-num" id="score-num">--</div>
+          </div>
+          <div class="score-label">Trust Score</div>
+        </div>
+        <div class="score-right">
+          <div class="score-email" id="r-email">--</div>
+          <div class="score-domain" id="r-domain">--</div>
+          <div id="r-decision"></div>
+          <div class="score-time" id="r-time">--</div>
+        </div>
+      </div>
+      <div class="checks-grid" id="checks-grid"></div>
+      <div class="enrich-card" id="enrich-card" style="display:none;"></div>
+    </div>
+
+    <div class="history">
+      <div class="history-head">
+        <h2 class="history-title">Verification History</h2>
+        <span class="history-count" id="h-count">0 records</span>
+      </div>
+      <div class="history-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Domain</th>
+              <th>Score</th>
+              <th>Decision</th>
+              <th>Verified</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="h-body">
+            <tr><td colspan="6" class="empty-row">No verifications yet — enter an email above to get started</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer style="text-align:center;padding:24px;color:#aaa;font-size:11px;font-family:Montserrat,sans-serif;">
+    © 2026 Fello · <a href="https://events.fello.com" target="_blank" style="color:#aaa;text-decoration:none;">events.fello.com</a>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  const emailInput = document.getElementById('email-input');
+  const verifyBtn = document.getElementById('verify-btn');
+  const spinner = document.getElementById('spinner');
+  const results = document.getElementById('results');
+  const mockBanner = document.getElementById('mock-banner');
+  const modeBadge = document.getElementById('mode-badge');
+
+  // ── Verify ────────────────────────────────────────────────
+  verifyBtn.addEventListener('click', run);
+  emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+
+  async function run() {
+    const email = emailInput.value.trim();
+    if (!email || !email.includes('@')) {
+      toast('Please enter a valid email address', 'error');
+      return;
+    }
+    verifyBtn.disabled = true;
+    spinner.style.display = 'block';
+
+    try {
+      const r = await fetch('/api/verify-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          phone: document.getElementById('phone-input').value.trim() || undefined,
+          companyName: document.getElementById('company-input').value.trim() || undefined
+        })
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Failed'); }
+      const data = await r.json();
+
+      if (data.checks?.emailVerification?.source === 'mock' ||
+          data.checks?.companyEnrichment?.source === 'mock') {
+        mockBanner.style.display = 'block';
+        modeBadge.textContent = 'Mock Mode';
+        modeBadge.style.background = 'var(--warning-bg)';
+        modeBadge.style.color = 'var(--warning)';
+        modeBadge.style.borderColor = 'rgba(245,146,49,0.2)';
+      } else {
+        mockBanner.style.display = 'none';
+        modeBadge.textContent = 'Live';
+        modeBadge.style.background = 'var(--success-bg)';
+        modeBadge.style.color = 'var(--success)';
+        modeBadge.style.borderColor = 'rgba(5,172,63,0.2)';
+      }
+
+      render(data);
+      loadHistory();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      verifyBtn.disabled = false;
+      spinner.style.display = 'none';
+    }
+  }
+
+  // ── Render Results ────────────────────────────────────────
+  function render(d) {
+    results.style.display = 'block';
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Score gauge
+    const circ = 2 * Math.PI * 54;
+    const off = circ - (d.trustScore / 100) * circ;
+    const ring = document.getElementById('score-ring');
+    let color = 'var(--danger)';
+    if (d.trustScore >= 80) color = 'var(--success)';
+    else if (d.trustScore >= 50) color = 'var(--warning)';
+    ring.style.stroke = color;
+    setTimeout(() => { ring.style.strokeDashoffset = off; }, 80);
+    animNum(document.getElementById('score-num'), 0, d.trustScore, 1000);
+
+    document.getElementById('r-email').textContent = d.email;
+    document.getElementById('r-domain').textContent = d.activeDomain ? `${d.domain} → ${d.activeDomain}` : d.domain;
+    document.getElementById('r-time').textContent = 'Verified ' + ago(d.verifiedAt);
+
+    const dec = document.getElementById('r-decision');
+    const labels = { auto_approved: '✅ Auto-Approved', needs_review: '⚠️ Needs Review', rejected: '❌ Rejected' };
+    dec.className = 'decision decision-' + d.decision;
+    dec.textContent = labels[d.decision] || d.decision;
+    if (d.reason) dec.textContent += ' — ' + d.reason;
+
+    // Checks
+    renderChecks(d.checks);
+    renderEnrich(d.checks.companyEnrichment);
+  }
+
+  function renderChecks(c) {
+    const grid = document.getElementById('checks-grid');
+    grid.innerHTML = '';
+
+    const d = c.domainVerification || {};
+
+    const defs = [
+      { key: 'emailClassification', title: 'Email Classification', icon: '📧',
+        fields: [['Type','type'],['Disposable','isDisposable',v=>v?'Yes ⚠️':'No']] },
+      { key: 'emailVerification', title: 'Email Verification', icon: '✉️',
+        fields: [['Deliverable','isDeliverable',v=>v?'Yes ✓':'No ✗'],['SMTP Valid','smtpValid',v=>v?'Yes ✓':'No ✗'],
+                 ['MX Records','mxRecords',v=>v?'Found ✓':'Missing ✗'],['Score','score'],['Source','source']] },
+      { key: 'domainVerification', title: 'DNS & Infrastructure', icon: '🔧',
+        fields: [['MX Records','hasMxRecords',v=>v?'Found ✓':'Missing ✗'],['A Record','hasARecord',v=>v?'Found ✓':'Missing ✗'],
+                 ['Valid SSL','hasValidSSL',v=>v?'Yes ✓':'No ✗'],['SSL Issuer','sslIssuer'],['SSL Org','sslOrganization'],['SSL Expiry','sslExpiry'],
+                 ['HTTP Status','httpStatus']] },
+    ];
+
+    const statusIcon = { pass:'✅', warn:'⚠️', fail:'❌', skipped:'⏭️', error:'💥' };
+
+    defs.forEach((def, i) => {
+      const chk = c[def.key];
+      if (!chk) return;
+
+      const card = document.createElement('div');
+      card.className = 'check-card check-' + chk.status;
+      card.style.animationDelay = (i * 0.08) + 's';
+
+      let body = '';
+      if (chk.status === 'skipped') {
+        body = `<div class="check-skip-msg">${chk.reason || 'Skipped'}</div>`;
+      } else if (chk.status === 'error') {
+        body = `<div class="check-err-msg">${chk.error || 'Error'}</div>`;
+      } else {
+        def.fields.forEach(([label, key, fmt]) => {
+          const v = chk[key];
+          if (v === undefined || v === null) return;
+          body += `<div class="check-row"><span class="check-key">${label}</span><span class="check-val">${fmt ? fmt(v) : v}</span></div>`;
+        });
+      }
+
+      card.innerHTML = `<div class="check-head"><span class="check-icon">${def.icon}</span><span class="check-name">${def.title}</span><span class="check-status">${statusIcon[chk.status]||'?'}</span></div><div class="check-body">${body}</div>`;
+      grid.appendChild(card);
+    });
+
+    // Website Content Analysis card
+    if (d.status && d.status !== 'skipped') {
+      const wsCard = document.createElement('div');
+      const wsStatus = d.isParkedDomain ? 'fail' : (d.hasRealContent ? 'pass' : 'warn');
+      wsCard.className = 'check-card check-' + wsStatus;
+      wsCard.style.animationDelay = '0.24s';
+
+      let wsBody = '';
+      wsBody += row('Website', d.websiteResponds ? 'Online ✓' : 'Offline ✗');
+      if (d.pageTitle) wsBody += row('Page Title', esc(d.pageTitle));
+      if (d.metaDescription) wsBody += row('Description', esc(d.metaDescription.substring(0, 80) + (d.metaDescription.length > 80 ? '…' : '')));
+      if (d.wordCount != null) wsBody += row('Word Count', d.wordCount.toLocaleString());
+      wsBody += row('Real Content', d.hasRealContent ? 'Yes ✓' : 'No ✗');
+      if (d.isParkedDomain) {
+        wsBody += `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--danger-bg);color:var(--danger);font-size:11px;font-weight:700;">⚠️ PARKED DOMAIN — "${esc(d.parkedReason || 'detected')}"</div>`;
+      }
+      if (d.redirectUrl) wsBody += row('Redirects To', `<a href="${esc(d.redirectUrl)}" target="_blank" style="color:var(--blue);word-break:break-all;">${esc(d.redirectUrl)}</a>`);
+
+      wsCard.innerHTML = `<div class="check-head"><span class="check-icon">🌐</span><span class="check-name">Website Content</span><span class="check-status">${statusIcon[wsStatus]}</span></div><div class="check-body">${wsBody}</div>`;
+      grid.appendChild(wsCard);
+    }
+
+    // WHOIS / Domain Age card
+    if (d.status && d.status !== 'skipped') {
+      const whCard = document.createElement('div');
+      const whStatus = d.domainAgeYears == null ? 'warn' : (d.domainAgeYears >= 1 ? 'pass' : (d.domainAgeYears >= 0.25 ? 'warn' : 'fail'));
+      whCard.className = 'check-card check-' + whStatus;
+      whCard.style.animationDelay = '0.32s';
+
+      let whBody = '';
+      if (d.domainAge) whBody += row('Domain Age', d.domainAge);
+      else whBody += row('Domain Age', 'Unknown');
+      if (d.createdDate) whBody += row('Created', d.createdDate);
+      if (d.expiryDate) whBody += row('Expires', d.expiryDate);
+      if (d.registrar) whBody += row('Registrar', d.registrar);
+      if (!d.createdDate && !d.registrar) {
+        whBody += `<div class="check-skip-msg">WHOIS data unavailable for this domain</div>`;
+      }
+
+      whCard.innerHTML = `<div class="check-head"><span class="check-icon">📋</span><span class="check-name">Domain WHOIS</span><span class="check-status">${statusIcon[whStatus]}</span></div><div class="check-body">${whBody}</div>`;
+      grid.appendChild(whCard);
+    }
+
+    // Google Places card
+    const gp = c.googlePlaces || {};
+    if (gp.status && gp.status !== 'skipped') {
+      const gpCard = document.createElement('div');
+      let gpStatus;
+      if (gp.status === 'requires_api') gpStatus = 'warn';
+      else if (gp.status === 'verified_match') gpStatus = 'pass';
+      else if (gp.status === 'unverified_match') gpStatus = 'warn';
+      else if (gp.status === 'not_found') gpStatus = 'fail';
+      else gpStatus = 'warn';
+      gpCard.className = 'check-card check-' + gpStatus;
+      gpCard.style.animationDelay = '0.40s';
+
+      let gpBody = '';
+      if (gp.status === 'requires_api') {
+        gpBody = `<div class="check-skip-msg">🔑 ${gp.note || 'Requires GOOGLE_API_KEY'}</div>`;
+      } else if (gp.hasListing) {
+        gpBody += row('Domain Match', gp.domainMatch ? '✅ Verified — website matches domain' : '⚠️ Not verified');
+        gpBody += row('Business Name', esc(gp.name || ''));
+        if (gp.address) gpBody += row('Address', esc(gp.address));
+        if (gp.rating) gpBody += row('Rating', '⭐ ' + gp.rating + '/5');
+        gpBody += row('Reviews', (gp.reviewCount || 0).toLocaleString());
+        if (gp.businessStatus) gpBody += row('Status', gp.businessStatus === 'OPERATIONAL' ? '✅ Operational' : gp.businessStatus);
+        gpBody += row('Has Hours', gp.hasHours ? 'Yes ✓' : 'No');
+        if (gp.phone) gpBody += row('Phone', gp.phone);
+        if (gp.website) gpBody += row('Website', `<a href="${esc(gp.website)}" target="_blank" style="color:var(--blue);word-break:break-all;">${esc(gp.website)}</a>`);
+        if (gp.mapsUrl) gpBody += row('Maps', `<a href="${esc(gp.mapsUrl)}" target="_blank" style="color:var(--blue);">View on Maps →</a>`);
+        if (gp.matchWarning) {
+          gpBody += `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--warning-bg);color:#8a5a00;font-size:11px;font-weight:600;">⚠️ ${esc(gp.matchWarning)}</div>`;
+        }
+      } else {
+        gpBody = '<div class="check-skip-msg">No Google Business listing found for this domain</div>';
+      }
+
+      gpCard.innerHTML = `<div class="check-head"><span class="check-icon">🗺️</span><span class="check-name">Google Places</span><span class="check-status">${statusIcon[gpStatus]}</span></div><div class="check-body">${gpBody}</div>`;
+      grid.appendChild(gpCard);
+    }
+
+    // Phone Validation card
+    const pv = c.phoneValidation || {};
+    if (pv.status && pv.status !== 'skipped') {
+      const pvCard = document.createElement('div');
+      pvCard.className = 'check-card check-' + pv.status;
+      pvCard.style.animationDelay = '0.48s';
+
+      let pvBody = '';
+      pvBody += row('Number', pv.original || pv.cleaned);
+      pvBody += row('Valid', pv.isValid ? 'Yes ✓' : 'No ✗');
+      pvBody += row('Type', (pv.type || 'unknown').replace(/_/g, ' '));
+      if (pv.country) pvBody += row('Country', pv.country);
+      pvBody += row('VoIP / Virtual', pv.isVoIP ? '⚠️ Yes' : 'No');
+      if (pv.isTollFree) pvBody += row('Toll-Free', '✓ Yes');
+      pvBody += row('Risk Level', pv.riskLevel === 'high' ? '🔴 High' : (pv.riskLevel === 'medium' ? '🟡 Medium' : '🟢 Low'));
+
+      pvCard.innerHTML = `<div class="check-head"><span class="check-icon">📱</span><span class="check-name">Phone Validation</span><span class="check-status">${statusIcon[pv.status]}</span></div><div class="check-body">${pvBody}</div>`;
+      grid.appendChild(pvCard);
+    }
+
+    // Online Presence card (scraped from company website)
+    const sp = c.searchPresence || {};
+    if (sp.status && sp.status !== 'skipped') {
+      const spCard = document.createElement('div');
+      let spStatus;
+      if (sp.status === 'found') spStatus = 'pass';
+      else if (sp.status === 'limited') spStatus = 'warn';
+      else if (sp.status === 'error') spStatus = 'warn';
+      else spStatus = 'fail';
+      spCard.className = 'check-card check-' + spStatus;
+      spCard.style.animationDelay = '0.56s';
+
+      let spBody = '';
+      if (sp.status === 'error') {
+        spBody = `<div class="check-skip-msg">⚠️ ${sp.error || 'Could not check online presence'}</div>`;
+      } else if (sp.details?.length) {
+        spBody += row('Profiles Found', `${sp.platformsFound} on website`);
+        spBody += row('Source', '🌐 Scraped from ' + esc(sp.source === 'website_scrape' ? 'company website' : sp.source));
+        spBody += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">';
+        sp.details.forEach(d => {
+          const icon = d.icon || '🔗';
+          spBody += `<div style="margin-bottom:6px;font-size:12px;">${icon} <a href="${esc(d.url)}" target="_blank" style="color:var(--blue);font-weight:600;">${esc(d.platform)}</a><div style="font-size:10px;color:var(--muted);margin-top:1px;word-break:break-all;">${esc(d.url)}</div></div>`;
+        });
+        spBody += '</div>';
+      } else {
+        spBody = '<div class="check-skip-msg">No social media links found on company website</div>';
+      }
+
+      spCard.innerHTML = `<div class="check-head"><span class="check-icon">🔍</span><span class="check-name">Online Presence</span><span class="check-status">${statusIcon[spStatus]}</span></div><div class="check-body">${spBody}</div>`;
+      grid.appendChild(spCard);
+    }
+
+    // Web History card (Wayback Machine)
+    const br = c.businessRegistration || {};
+    if (br.status && br.status !== 'skipped') {
+      const brCard = document.createElement('div');
+      let brStatus;
+      if (br.status === 'found') brStatus = 'pass';
+      else if (br.status === 'limited') brStatus = 'warn';
+      else if (br.status === 'error') brStatus = 'warn';
+      else brStatus = 'fail';
+      brCard.className = 'check-card check-' + brStatus;
+      brCard.style.animationDelay = '0.64s';
+
+      let brBody = '';
+      if (br.status === 'found' || br.status === 'limited') {
+        brBody += row('First Archived', br.firstArchived || '—');
+        brBody += row('Archive Age', br.archiveAgeYears + ' years');
+        brBody += row('Established', br.isEstablished ? '✅ Yes (2+ years)' : '⚠️ Newer site');
+        if (br.archiveUrl) brBody += row('First Snapshot', `<a href="${esc(br.archiveUrl)}" target="_blank" style="color:var(--blue);">View on Wayback Machine →</a>`);
+      } else if (br.status === 'error') {
+        brBody = `<div class="check-skip-msg">⚠️ ${br.error || 'Could not reach Wayback Machine'}</div>`;
+      } else {
+        brBody = '<div class="check-skip-msg">No web archive history found for this domain</div>';
+      }
+
+      brCard.innerHTML = `<div class="check-head"><span class="check-icon">🕰️</span><span class="check-name">Web History</span><span class="check-status">${statusIcon[brStatus]}</span></div><div class="check-body">${brBody}</div>`;
+      grid.appendChild(brCard);
+    }
+
+    // Tranco Domain Rank card
+    const tr = c.trancoRank || {};
+    if (tr.status && tr.status !== 'skipped') {
+      const trCard = document.createElement('div');
+      let trStatus = tr.status === 'found' && tr.isTopSite ? 'pass' : tr.status === 'found' ? 'warn' : 'fail';
+      trCard.className = 'check-card check-' + trStatus;
+      trCard.style.animationDelay = '0.72s';
+      let trBody = '';
+      if (tr.status === 'found') {
+        trBody += row('Global Rank', '#' + (tr.rank || 0).toLocaleString());
+        trBody += row('Top 100K Site', tr.isTopSite ? '✅ Yes' : 'No');
+      } else {
+        trBody = '<div class="check-skip-msg">Domain not found in Tranco top sites list</div>';
+      }
+      trCard.innerHTML = `<div class="check-head"><span class="check-icon">📊</span><span class="check-name">Domain Popularity</span><span class="check-status">${statusIcon[trStatus]}</span></div><div class="check-body">${trBody}</div>`;
+      grid.appendChild(trCard);
+    }
+
+    // Wikipedia card
+    const wp = c.wikipedia || {};
+    if (wp.status && wp.status !== 'skipped') {
+      const wpCard = document.createElement('div');
+      const wpStatus = wp.status === 'found' ? 'pass' : 'fail';
+      wpCard.className = 'check-card check-' + wpStatus;
+      wpCard.style.animationDelay = '0.78s';
+      let wpBody = '';
+      if (wp.status === 'found') {
+        wpBody += row('Article', esc(wp.title || ''));
+        if (wp.description) wpBody += row('Description', esc(wp.description));
+        if (wp.extract) wpBody += `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--bg);font-size:11px;line-height:1.5;color:var(--muted);">${esc(wp.extract)}</div>`;
+        if (wp.url) wpBody += `<div style="margin-top:6px;"><a href="${esc(wp.url)}" target="_blank" style="color:var(--blue);font-size:11px;font-weight:600;">View on Wikipedia →</a></div>`;
+      } else {
+        wpBody = '<div class="check-skip-msg">No Wikipedia article found for this company</div>';
+      }
+      wpCard.innerHTML = `<div class="check-head"><span class="check-icon">📰</span><span class="check-name">Wikipedia</span><span class="check-status">${statusIcon[wpStatus]}</span></div><div class="check-body">${wpBody}</div>`;
+      grid.appendChild(wpCard);
+    }
+
+    // SEC EDGAR card
+    const sec = c.secEdgar || {};
+    if (sec.status && sec.status !== 'skipped') {
+      const secCard = document.createElement('div');
+      const secStatus = sec.status === 'found' && sec.isPublicCompany ? 'pass' : 'fail';
+      secCard.className = 'check-card check-' + secStatus;
+      secCard.style.animationDelay = '0.84s';
+      let secBody = '';
+      if (sec.status === 'found' && sec.isPublicCompany) {
+        secBody += row('Public Company', '✅ Yes');
+        if (sec.entityName) secBody += row('Entity', esc(sec.entityName));
+        if (sec.filingCount) secBody += row('10-K Filings', sec.filingCount);
+      } else {
+        secBody = '<div class="check-skip-msg">Not found as a publicly traded company</div>';
+      }
+      secCard.innerHTML = `<div class="check-head"><span class="check-icon">📈</span><span class="check-name">SEC EDGAR</span><span class="check-status">${statusIcon[secStatus]}</span></div><div class="check-body">${secBody}</div>`;
+      grid.appendChild(secCard);
+    }
+
+  }
+
+  function row(k, v) { return `<div class="check-row"><span class="check-key">${k}</span><span class="check-val">${v}</span></div>`; }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+
+  function renderEnrich(e) {
+    const card = document.getElementById('enrich-card');
+    if (!e || e.status === 'skipped' || e.status === 'error' || e.status === 'unavailable') {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    let social = '';
+    if (e.linkedinUrl) social += `<a href="${e.linkedinUrl}" target="_blank" class="social-link" title="LinkedIn">in</a>`;
+    if (e.twitterUrl) social += `<a href="${e.twitterUrl}" target="_blank" class="social-link" title="Twitter">𝕏</a>`;
+    if (e.facebookUrl) social += `<a href="${e.facebookUrl}" target="_blank" class="social-link" title="Facebook">f</a>`;
+
+    const f = [['Industry', e.industry],['Employees', e.employeeCount],
+               ['Location', [e.city, e.country].filter(Boolean).join(', ')],
+               ['Emails Found', e.emailCount],['Source', e.source]].filter(x => x[1]);
+
+    card.innerHTML = `
+      <div class="enrich-head">
+        <div class="enrich-company">
+          <div class="enrich-icon">🏢</div>
+          <div>
+            <div class="enrich-name">${e.companyName || 'Unknown'}</div>
+            ${e.description ? `<div class="enrich-desc">${e.description}</div>` : ''}
+          </div>
+        </div>
+        ${social ? `<div class="social-links">${social}</div>` : ''}
+      </div>
+      <div class="enrich-fields">${f.map(([l,v]) => `<div class="enrich-field"><div class="enrich-label">${l}</div><div class="enrich-value">${v}</div></div>`).join('')}</div>
+    `;
+  }
+
+  // ── History ───────────────────────────────────────────────
+  function loadHistory() {
+    fetch('/api/verify-customer/results').then(r => r.json()).then(list => {
+      document.getElementById('h-count').textContent = list.length + ' record' + (list.length !== 1 ? 's' : '');
+      const tb = document.getElementById('h-body');
+      if (!list.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="empty-row">No verifications yet</td></tr>';
+        return;
+      }
+      const dlabels = { auto_approved:'Approved', needs_review:'Review', rejected:'Rejected' };
+      tb.innerHTML = list.map(r => {
+        let sc = 's-red';
+        if (r.trustScore >= 80) sc = 's-green';
+        else if (r.trustScore >= 50) sc = 's-amber';
+        return `<tr>
+          <td class="td-email" onclick="document.getElementById('email-input').value='${r.email}';document.getElementById('verify-btn').click();">${r.email}</td>
+          <td class="td-domain">${r.domain}</td>
+          <td class="td-score ${sc}">${r.trustScore}</td>
+          <td><span class="td-decision decision-${r.decision}">${dlabels[r.decision]||r.decision}</span></td>
+          <td class="td-time">${ago(r.verifiedAt)}</td>
+          <td><button class="td-delete" onclick="delVerify('${r.email}')" title="Delete">🗑️</button></td>
+        </tr>`;
+      }).join('');
+    }).catch(() => {});
+  }
+
+  window.delVerify = function(email) {
+    if (!confirm('Delete verification for ' + email + '?')) return;
+    fetch('/api/verify-customer/' + encodeURIComponent(email), { method: 'DELETE' })
+      .then(r => { if (r.ok) { toast('Deleted'); loadHistory(); } else toast('Failed', 'error'); });
+  };
+
+  // ── Helpers ───────────────────────────────────────────────
+  function animNum(el, from, to, dur) {
+    const t0 = performance.now();
+    (function tick(now) {
+      const p = Math.min((now - t0) / dur, 1);
+      el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1-p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    })(t0);
+  }
+
+  function ago(s) {
+    if (!s) return '--';
+    const d = new Date(s), n = Date.now(), sec = Math.floor((n - d) / 1000);
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return Math.floor(sec/60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec/3600) + 'h ago';
+    if (sec < 604800) return Math.floor(sec/86400) + 'd ago';
+    return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  }
+
+  function toast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show toast-' + (type || 'success');
+    setTimeout(() => { t.className = 'toast'; }, 3500);
+  }
+
+  loadHistory();
+})();
+</script>
+</body>
+</html>
