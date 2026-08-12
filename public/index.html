@@ -214,6 +214,7 @@
       display: flex;
       align-items: center;
       gap: 36px;
+      flex-wrap: wrap;
       box-shadow: var(--shadow);
       margin-bottom: 20px;
     }
@@ -316,6 +317,8 @@
     .check-pass::before { background: var(--success); }
     .check-warn::before { background: var(--warning); }
     .check-fail::before { background: var(--danger); }
+    .check-neutral::before { background: #ccc; }
+    .check-neutral .check-status { color: #aaa; }
     .check-skipped::before, .check-error::before { background: #ccc; }
 
     .check-head {
@@ -655,7 +658,7 @@
     </div>
 
     <div id="results" class="results" style="display:none;">
-      <div class="score-card">
+      <div class="score-card" id="score-card">
         <div class="score-left">
           <div class="score-gauge">
             <svg viewBox="0 0 120 120">
@@ -673,7 +676,7 @@
           <div class="score-time" id="r-time">--</div>
         </div>
       </div>
-      <div class="checks-grid" id="checks-grid"></div>
+      <div id="checks-container"></div>
       <div class="enrich-card" id="enrich-card" style="display:none;"></div>
     </div>
 
@@ -788,6 +791,12 @@
 
     document.getElementById('r-email').textContent = d.email;
     document.getElementById('r-domain').textContent = d.activeDomain ? `${d.domain} → ${d.activeDomain}` : d.domain;
+    if (d.extractedCompanyName) {
+      const domainEl = document.getElementById('r-domain');
+      if (domainEl) {
+        domainEl.innerHTML += `<div style="font-size:11px;color:var(--primary);margin-top:2px;">🏢 Detected: ${esc(d.extractedCompanyName)}</div>`;
+      }
+    }
     document.getElementById('r-time').textContent = 'Verified ' + ago(d.verifiedAt);
 
     const dec = document.getElementById('r-decision');
@@ -796,14 +805,71 @@
     dec.textContent = labels[d.decision] || d.decision;
     if (d.reason) dec.textContent += ' — ' + d.reason;
 
+    const oldBd = document.getElementById('score-breakdown');
+    if (oldBd) oldBd.remove();
+
+    if (d.scoreBreakdown) {
+      const bd = d.scoreBreakdown;
+      const categories = [
+        { key: 'emailSignals', label: 'Email', icon: '📧' },
+        { key: 'emailAuth', label: 'Email Auth', icon: '🔒' },
+        { key: 'infrastructure', label: 'DNS & SSL', icon: '🔧' },
+        { key: 'websiteContent', label: 'Website', icon: '🌐' },
+        { key: 'domainAge', label: 'Domain Age', icon: '📋' },
+        { key: 'certHistory', label: 'Cert History', icon: '📜' },
+        { key: 'hostingAnalysis', label: 'Hosting', icon: '🖥️' },
+        { key: 'companyEnrichment', label: 'Company Data', icon: '🏢' },
+        { key: 'googlePlaces', label: 'Google Places', icon: '🗺️' },
+        { key: 'phoneValidation', label: 'Phone', icon: '📞' },
+        { key: 'onlinePresence', label: 'Online Presence', icon: '🔍' },
+        { key: 'webHistory', label: 'Web History', icon: '🕰️' },
+        { key: 'safeBrowsing', label: 'Safe Browsing', icon: '🛡️' },
+        { key: 'enterpriseBonus', label: 'Enterprise Bonus', icon: '⭐' },
+      ];
+      
+      let breakdownHTML = '<div id="score-breakdown" style="flex-basis:100%;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">';
+      breakdownHTML += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Score Breakdown</div>';
+      breakdownHTML += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
+      for (const cat of categories) {
+        const bdData = bd[cat.key];
+        if (!bdData) continue;
+        const pct = bdData.max > 0 ? Math.round((bdData.earned / bdData.max) * 100) : 0;
+        const barColor = bdData.earned === 0 ? '#eee' : pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--danger)';
+        breakdownHTML += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">`;
+        breakdownHTML += `<span style="font-size:10px;width:14px;">${cat.icon}</span>`;
+        breakdownHTML += `<span style="font-size:10px;color:var(--muted);width:85px;white-space:nowrap;overflow:hidden;">${cat.label}</span>`;
+        breakdownHTML += `<div style="flex:1;height:4px;background:#eee;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;"></div></div>`;
+        breakdownHTML += `<span style="font-size:10px;font-weight:600;color:var(--black);width:30px;text-align:right;">${bdData.earned}/${bdData.max}</span>`;
+        breakdownHTML += `</div>`;
+      }
+      breakdownHTML += '</div></div>';
+      
+      document.getElementById('score-card').insertAdjacentHTML('beforeend', breakdownHTML);
+    }
+
     // Checks
-    renderChecks(d.checks);
+    renderChecks(d.checks, d.domain, d.activeDomain);
     renderEnrich(d.checks.companyEnrichment);
   }
 
-  function renderChecks(c) {
-    const grid = document.getElementById('checks-grid');
-    grid.innerHTML = '';
+  function renderChecks(c, emailDomain, activeDomain) {
+    const container = document.getElementById('checks-container');
+    container.innerHTML = '';
+
+    const coreSection = document.createElement('div');
+    coreSection.innerHTML = '<h3 style="font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;color:var(--black);margin:0 0 12px 4px;letter-spacing:-0.3px;">Core Verification</h3>';
+    const coreGrid = document.createElement('div');
+    coreGrid.className = 'checks-grid';
+    coreSection.appendChild(coreGrid);
+    container.appendChild(coreSection);
+
+    const enhancedSection = document.createElement('div');
+    enhancedSection.style.marginTop = '16px';
+    enhancedSection.innerHTML = '<h3 style="font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;color:var(--muted);margin:0 0 12px 4px;letter-spacing:-0.3px;">🏢 Enhanced Signals <span style="font-weight:400;font-size:11px;color:#aaa;">(bonus only \u2014 won\u0027t lower score)</span></h3>';
+    const enhancedGrid = document.createElement('div');
+    enhancedGrid.className = 'checks-grid';
+    enhancedSection.appendChild(enhancedGrid);
+    container.appendChild(enhancedSection);
 
     const d = c.domainVerification || {};
 
@@ -819,7 +885,7 @@
                  ['HTTP Status','httpStatus']] },
     ];
 
-    const statusIcon = { pass:'✅', warn:'⚠️', fail:'❌', skipped:'⏭️', error:'💥' };
+    const statusIcon = { pass:'✅', warn:'⚠️', fail:'❌', skipped:'⏭️', error:'💥', neutral:'<span style="color:#aaa;font-size:18px;">—</span>' };
 
     defs.forEach((def, i) => {
       const chk = c[def.key];
@@ -843,7 +909,7 @@
       }
 
       card.innerHTML = `<div class="check-head"><span class="check-icon">${def.icon}</span><span class="check-name">${def.title}</span><span class="check-status">${statusIcon[chk.status]||'?'}</span></div><div class="check-body">${body}</div>`;
-      grid.appendChild(card);
+      coreGrid.appendChild(card);
     });
 
     // Website Content Analysis card
@@ -854,8 +920,9 @@
       wsCard.style.animationDelay = '0.24s';
 
       let wsBody = '';
-      wsBody += row('Website', d.websiteResponds ? 'Online ✓' : 'Offline ✗');
-      if (d.pageTitle) wsBody += row('Page Title', esc(d.pageTitle));
+      const siteUrl = d.redirectUrl || ('https://' + (activeDomain || emailDomain || ''));
+      wsBody += row('Website', d.websiteResponds ? `<a href="${esc(siteUrl)}" target="_blank" style="color:var(--blue);font-weight:600;">Online ✓ ↗</a>` : 'Offline ✗');
+      if (d.pageTitle) wsBody += row('Page Title', `<a href="${esc(siteUrl)}" target="_blank" style="color:var(--black);text-decoration:none;">${esc(d.pageTitle)}</a>`);
       if (d.metaDescription) wsBody += row('Description', esc(d.metaDescription.substring(0, 80) + (d.metaDescription.length > 80 ? '…' : '')));
       if (d.wordCount != null) wsBody += row('Word Count', d.wordCount.toLocaleString());
       wsBody += row('Real Content', d.hasRealContent ? 'Yes ✓' : 'No ✗');
@@ -865,7 +932,7 @@
       if (d.redirectUrl) wsBody += row('Redirects To', `<a href="${esc(d.redirectUrl)}" target="_blank" style="color:var(--blue);word-break:break-all;">${esc(d.redirectUrl)}</a>`);
 
       wsCard.innerHTML = `<div class="check-head"><span class="check-icon">🌐</span><span class="check-name">Website Content</span><span class="check-status">${statusIcon[wsStatus]}</span></div><div class="check-body">${wsBody}</div>`;
-      grid.appendChild(wsCard);
+      coreGrid.appendChild(wsCard);
     }
 
     // WHOIS / Domain Age card
@@ -886,7 +953,7 @@
       }
 
       whCard.innerHTML = `<div class="check-head"><span class="check-icon">📋</span><span class="check-name">Domain WHOIS</span><span class="check-status">${statusIcon[whStatus]}</span></div><div class="check-body">${whBody}</div>`;
-      grid.appendChild(whCard);
+      coreGrid.appendChild(whCard);
     }
 
     // Google Places card
@@ -924,7 +991,7 @@
       }
 
       gpCard.innerHTML = `<div class="check-head"><span class="check-icon">🗺️</span><span class="check-name">Google Places</span><span class="check-status">${statusIcon[gpStatus]}</span></div><div class="check-body">${gpBody}</div>`;
-      grid.appendChild(gpCard);
+      coreGrid.appendChild(gpCard);
     }
 
     // Phone Validation card
@@ -944,7 +1011,7 @@
       pvBody += row('Risk Level', pv.riskLevel === 'high' ? '🔴 High' : (pv.riskLevel === 'medium' ? '🟡 Medium' : '🟢 Low'));
 
       pvCard.innerHTML = `<div class="check-head"><span class="check-icon">📱</span><span class="check-name">Phone Validation</span><span class="check-status">${statusIcon[pv.status]}</span></div><div class="check-body">${pvBody}</div>`;
-      grid.appendChild(pvCard);
+      coreGrid.appendChild(pvCard);
     }
 
     // Online Presence card (scraped from company website)
@@ -976,7 +1043,7 @@
       }
 
       spCard.innerHTML = `<div class="check-head"><span class="check-icon">🔍</span><span class="check-name">Online Presence</span><span class="check-status">${statusIcon[spStatus]}</span></div><div class="check-body">${spBody}</div>`;
-      grid.appendChild(spCard);
+      coreGrid.appendChild(spCard);
     }
 
     // Web History card (Wayback Machine)
@@ -1004,14 +1071,14 @@
       }
 
       brCard.innerHTML = `<div class="check-head"><span class="check-icon">🕰️</span><span class="check-name">Web History</span><span class="check-status">${statusIcon[brStatus]}</span></div><div class="check-body">${brBody}</div>`;
-      grid.appendChild(brCard);
+      coreGrid.appendChild(brCard);
     }
 
     // Tranco Domain Rank card
     const tr = c.trancoRank || {};
     if (tr.status && tr.status !== 'skipped') {
       const trCard = document.createElement('div');
-      let trStatus = tr.status === 'found' && tr.isTopSite ? 'pass' : tr.status === 'found' ? 'warn' : 'fail';
+      let trStatus = tr.status === 'found' && tr.isTopSite ? 'pass' : tr.status === 'found' ? 'warn' : 'neutral';
       trCard.className = 'check-card check-' + trStatus;
       trCard.style.animationDelay = '0.72s';
       let trBody = '';
@@ -1022,14 +1089,14 @@
         trBody = '<div class="check-skip-msg">Domain not found in Tranco top sites list</div>';
       }
       trCard.innerHTML = `<div class="check-head"><span class="check-icon">📊</span><span class="check-name">Domain Popularity</span><span class="check-status">${statusIcon[trStatus]}</span></div><div class="check-body">${trBody}</div>`;
-      grid.appendChild(trCard);
+      enhancedGrid.appendChild(trCard);
     }
 
     // Wikipedia card
     const wp = c.wikipedia || {};
     if (wp.status && wp.status !== 'skipped') {
       const wpCard = document.createElement('div');
-      const wpStatus = wp.status === 'found' ? 'pass' : 'fail';
+      const wpStatus = wp.status === 'found' ? 'pass' : 'neutral';
       wpCard.className = 'check-card check-' + wpStatus;
       wpCard.style.animationDelay = '0.78s';
       let wpBody = '';
@@ -1042,14 +1109,14 @@
         wpBody = '<div class="check-skip-msg">No Wikipedia article found for this company</div>';
       }
       wpCard.innerHTML = `<div class="check-head"><span class="check-icon">📰</span><span class="check-name">Wikipedia</span><span class="check-status">${statusIcon[wpStatus]}</span></div><div class="check-body">${wpBody}</div>`;
-      grid.appendChild(wpCard);
+      enhancedGrid.appendChild(wpCard);
     }
 
     // SEC EDGAR card
     const sec = c.secEdgar || {};
     if (sec.status && sec.status !== 'skipped') {
       const secCard = document.createElement('div');
-      const secStatus = sec.status === 'found' && sec.isPublicCompany ? 'pass' : 'fail';
+      const secStatus = sec.status === 'found' && sec.isPublicCompany ? 'pass' : 'neutral';
       secCard.className = 'check-card check-' + secStatus;
       secCard.style.animationDelay = '0.84s';
       let secBody = '';
@@ -1061,7 +1128,97 @@
         secBody = '<div class="check-skip-msg">Not found as a publicly traded company</div>';
       }
       secCard.innerHTML = `<div class="check-head"><span class="check-icon">📈</span><span class="check-name">SEC EDGAR</span><span class="check-status">${statusIcon[secStatus]}</span></div><div class="check-body">${secBody}</div>`;
-      grid.appendChild(secCard);
+      enhancedGrid.appendChild(secCard);
+    }
+
+    // Email Authentication card (SPF/DKIM/DMARC)
+    const ea = c.emailAuth || {};
+    if (ea.status && ea.status !== 'skipped') {
+      const eaCard = document.createElement('div');
+      let eaStatus = ea.status === 'strong' ? 'pass' : ea.status === 'partial' ? 'warn' : ea.status === 'error' ? 'warn' : 'fail';
+      eaCard.className = 'check-card check-' + eaStatus;
+      eaCard.style.animationDelay = '0.88s';
+      let eaBody = '';
+      if (ea.status === 'error') {
+        eaBody = `<div class="check-skip-msg">\u26a0\ufe0f ${ea.error || 'Could not check'}</div>`;
+      } else {
+        eaBody += row('SPF', ea.hasSPF ? '\u2705 Configured' : '\u274c Missing');
+        eaBody += row('DKIM', ea.hasDKIM ? '\u2705 Found (' + esc(ea.dkimSelector || '') + ')' : '\u274c Not found');
+        eaBody += row('DMARC', ea.hasDMARC ? '\u2705 Policy: ' + esc(ea.dmarcPolicy || 'set') : '\u274c Missing');
+        eaBody += row('Auth Score', ea.authCount + '/3 protocols');
+      }
+      eaCard.innerHTML = `<div class="check-head"><span class="check-icon">\ud83d\udd12</span><span class="check-name">Email Authentication</span><span class="check-status">${statusIcon[eaStatus]}</span></div><div class="check-body">${eaBody}</div>`;
+      coreGrid.appendChild(eaCard);
+    }
+
+    // Safe Browsing card
+    const sb = c.safeBrowsing || {};
+    if (sb.status && sb.status !== 'skipped') {
+      const sbCard = document.createElement('div');
+      let sbStatus = sb.status === 'safe' ? 'pass' : sb.status === 'unsafe' ? 'fail' : 'warn';
+      sbCard.className = 'check-card check-' + sbStatus;
+      sbCard.style.animationDelay = '0.92s';
+      let sbBody = '';
+      if (sb.status === 'unsafe') {
+        sbBody += row('Status', '\ud83d\uded1 UNSAFE — Threats Detected');
+        sbBody += row('Threats', sb.threatCount || 0);
+        if (sb.threats?.length) {
+          sb.threats.forEach(t => {
+            sbBody += row('Threat', esc((t.type || '').replace(/_/g, ' ')));
+          });
+        }
+      } else if (sb.status === 'safe') {
+        sbBody += row('Status', '\u2705 Safe — No threats detected');
+        sbBody += row('Source', 'Google Safe Browsing');
+      } else {
+        sbBody = `<div class="check-skip-msg">\u26a0\ufe0f ${sb.error || sb.note || 'Could not check'}</div>`;
+      }
+      sbCard.innerHTML = `<div class="check-head"><span class="check-icon">\ud83d\udee1\ufe0f</span><span class="check-name">Safe Browsing</span><span class="check-status">${statusIcon[sbStatus]}</span></div><div class="check-body">${sbBody}</div>`;
+      coreGrid.appendChild(sbCard);
+    }
+
+    // Certificate Transparency card
+    const ct = c.certTransparency || {};
+    if (ct.status && ct.status !== 'skipped') {
+      const ctCard = document.createElement('div');
+      let ctStatus = ct.status === 'found' && ct.yearsActive >= 1 ? 'pass' : ct.status === 'found' ? 'warn' : ct.status === 'error' ? 'warn' : 'neutral';
+      ctCard.className = 'check-card check-' + ctStatus;
+      ctCard.style.animationDelay = '0.96s';
+      let ctBody = '';
+      if (ct.status === 'found') {
+        ctBody += row('Certificates', ct.certCount + ' issued');
+        ctBody += row('First Seen', ct.firstSeen || '\u2014');
+        ctBody += row('Last Seen', ct.lastSeen || '\u2014');
+        ctBody += row('Active Years', ct.yearsActive ? ct.yearsActive + ' years' : '\u2014');
+      } else if (ct.status === 'error') {
+        ctBody = `<div class="check-skip-msg">\u26a0\ufe0f ${ct.error || 'crt.sh unavailable'}</div>`;
+      } else {
+        ctBody = '<div class="check-skip-msg">No certificates found in transparency logs</div>';
+      }
+      ctCard.innerHTML = `<div class="check-head"><span class="check-icon">\ud83d\udcdc</span><span class="check-name">Cert History</span><span class="check-status">${statusIcon[ctStatus]}</span></div><div class="check-body">${ctBody}</div>`;
+      coreGrid.appendChild(ctCard);
+    }
+
+    // Reverse IP / Hosting card
+    const ri = c.reverseIP || {};
+    if (ri.status && ri.status !== 'skipped') {
+      const riCard = document.createElement('div');
+      let riStatus = ri.status === 'found' && ri.isDedicatedHosting ? 'pass' : ri.status === 'found' && ri.riskLevel === 'high' ? 'fail' : ri.status === 'found' ? 'warn' : ri.status === 'error' ? 'warn' : 'neutral';
+      riCard.className = 'check-card check-' + riStatus;
+      riCard.style.animationDelay = '1.0s';
+      let riBody = '';
+      if (ri.status === 'found') {
+        riBody += row('IP Address', ri.ip || '\u2014');
+        riBody += row('Shared Domains', (ri.sharedDomains || 0).toLocaleString());
+        riBody += row('Hosting', ri.isDedicatedHosting ? '\u2705 Dedicated' : ri.isSharedHosting ? '\u26a0\ufe0f Shared (mass hosting)' : 'Shared');
+        riBody += row('Risk', ri.riskLevel === 'high' ? '\ud83d\udd34 High — domain farm' : ri.riskLevel === 'medium' ? '\ud83d\udfe1 Medium' : '\ud83d\udfe2 Low');
+      } else if (ri.status === 'error') {
+        riBody = `<div class="check-skip-msg">\u26a0\ufe0f ${ri.error || 'Could not check'}</div>`;
+      } else {
+        riBody = '<div class="check-skip-msg">Could not resolve IP</div>';
+      }
+      riCard.innerHTML = `<div class="check-head"><span class="check-icon">\ud83c\udf10</span><span class="check-name">Hosting Analysis</span><span class="check-status">${statusIcon[riStatus]}</span></div><div class="check-body">${riBody}</div>`;
+      coreGrid.appendChild(riCard);
     }
 
   }

@@ -738,6 +738,38 @@ class CustomerVerifyService {
         } catch (_) { /* non-critical */ }
       }
 
+      // If scraping found no profiles, try direct URL checks as fallback
+      if (foundProfiles.length === 0) {
+        const slug = (companyName || domain.split('.')[0]).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const slugDash = (companyName || domain.split('.')[0]).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const directChecks = [
+          { platform: 'LinkedIn', url: `https://www.linkedin.com/company/${slugDash}`, icon: '💼' },
+          { platform: 'Facebook', url: `https://www.facebook.com/${slug}`, icon: '📘' },
+          { platform: 'Instagram', url: `https://www.instagram.com/${slug}`, icon: '📷' },
+        ];
+        
+        const directResults = await Promise.all(directChecks.map(async (check) => {
+          try {
+            const resp = await fetch(check.url, {
+              method: 'HEAD',
+              redirect: 'manual',
+              signal: AbortSignal.timeout(5000),
+              headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+            });
+            // LinkedIn returns 200 for existing pages, 404 for non-existing
+            // Facebook returns 302 to login for non-existing pages
+            if (resp.status === 200) {
+              return { ...check, exists: true, source: 'direct_check' };
+            }
+          } catch (_) {}
+          return null;
+        }));
+        
+        for (const r of directResults) {
+          if (r) foundProfiles.push(r);
+        }
+      }
+
       const foundCount = foundProfiles.length;
       const source = foundProfiles.some(p => p.source === 'hunter.io') ? 'website_scrape + hunter.io' : 'website_scrape';
 
@@ -760,6 +792,164 @@ class CustomerVerifyService {
     } catch (e) {
       console.warn(`[CustomerVerify] Online presence error: ${e.message}`);
       return { status: 'error', error: e.message, platformsFound: 0, details: [], source: 'website_scrape' };
+    }
+  }
+
+  async checkEmailAuth(domain) {
+    const results = { status: 'checked', hasSPF: false, hasDKIM: false, hasDMARC: false, score: 0, source: 'dns' };
+    try {
+      // Check SPF
+      try {
+        const txt = await dns.resolveTxt(domain);
+        const spfRecord = txt.flat().find(r => r.startsWith('v=spf1'));
+        if (spfRecord) {
+          results.hasSPF = true;
+          results.spfRecord = spfRecord.substring(0, 100);
+        }
+      } catch (_) {}
+
+      // Check DMARC
+      try {
+        const dmarc = await dns.resolveTxt('_dmarc.' + domain);
+        const dmarcRecord = dmarc.flat().find(r => r.startsWith('v=DMARC1'));
+        if (dmarcRecord) {
+          results.hasDMARC = true;
+          const policyMatch = dmarcRecord.match(/p=(\w+)/);
+          results.dmarcPolicy = policyMatch ? policyMatch[1] : 'unknown';
+        }
+      } catch (_) {}
+
+      // Check DKIM (common selectors)
+      const dkimSelectors = ['default', 'google', 'selector1', 'selector2', 'k1', 'mail', 'dkim'];
+      for (const sel of dkimSelectors) {
+        try {
+          const dkim = await dns.resolveTxt(sel + '._domainkey.' + domain);
+          const dkimRecord = dkim.flat().find(r => r.includes('v=DKIM1') || r.includes('p='));
+          if (dkimRecord) {
+            results.hasDKIM = true;
+            results.dkimSelector = sel;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      // Score: 0-3 based on how many auth methods are configured
+      results.authCount = [results.hasSPF, results.hasDKIM, results.hasDMARC].filter(Boolean).length;
+      results.status = results.authCount >= 2 ? 'strong' : results.authCount === 1 ? 'partial' : 'none';
+      return results;
+    } catch (e) {
+      return { status: 'error', error: e.message, source: 'dns' };
+    }
+  }
+
+  async checkSafeBrowsing(domain) {
+    if (!this.googleApiKey) {
+      return { status: 'skipped', isSafe: true, note: 'Requires GOOGLE_API_KEY', source: 'safe_browsing' };
+    }
+    try {
+      const body = JSON.stringify({
+        client: { clientId: 'fello-verify', clientVersion: '1.0' },
+        threatInfo: {
+          threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
+          platformTypes: ['ANY_PLATFORM'],
+          threatEntryTypes: ['URL'],
+          threatEntries: [
+            { url: 'http://' + domain + '/' },
+            { url: 'https://' + domain + '/' }
+          ]
+        }
+      });
+      const resp = await fetch(`https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${this.googleApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(5000)
+      });
+      const data = await resp.json();
+      const threats = data.matches || [];
+      return {
+        status: threats.length > 0 ? 'unsafe' : 'safe',
+        isSafe: threats.length === 0,
+        threatCount: threats.length,
+        threats: threats.map(t => ({ type: t.threatType, platform: t.platformType })),
+        source: 'google_safe_browsing'
+      };
+    } catch (e) {
+      return { status: 'error', isSafe: true, error: e.message, source: 'safe_browsing' };
+    }
+  }
+
+  async checkCertTransparency(domain) {
+    try {
+      const resp = await fetch(`https://crt.sh/?q=${encodeURIComponent(domain)}&output=json&deduplicate=Y`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'FelloVerify/1.0' }
+      });
+      if (!resp.ok) return { status: 'error', source: 'crt_sh' };
+      const certs = await resp.json();
+      if (!Array.isArray(certs) || certs.length === 0) {
+        return { status: 'not_found', certCount: 0, source: 'crt_sh' };
+      }
+      // Find earliest and latest cert
+      let earliest = null;
+      let latest = null;
+      for (const cert of certs) {
+        const entered = cert.entry_timestamp || cert.not_before;
+        if (entered) {
+          const d = new Date(entered);
+          if (!earliest || d < earliest) earliest = d;
+          if (!latest || d > latest) latest = d;
+        }
+      }
+      const yearsActive = earliest ? ((Date.now() - earliest.getTime()) / (365.25 * 24 * 60 * 60 * 1000)).toFixed(1) : null;
+      return {
+        status: 'found',
+        certCount: certs.length,
+        firstSeen: earliest ? earliest.toISOString().split('T')[0] : null,
+        lastSeen: latest ? latest.toISOString().split('T')[0] : null,
+        yearsActive: yearsActive ? parseFloat(yearsActive) : null,
+        source: 'crt_sh'
+      };
+    } catch (e) {
+      return { status: 'error', error: e.message, source: 'crt_sh' };
+    }
+  }
+
+  async checkReverseIP(domain) {
+    try {
+      // Resolve domain to IP
+      const addresses = await dns.resolve4(domain);
+      if (!addresses || addresses.length === 0) {
+        return { status: 'error', error: 'Could not resolve IP', source: 'reverse_ip' };
+      }
+      const ip = addresses[0];
+      
+      // Check reverse IP via HackerTarget (free, 100/day)
+      const resp = await fetch(`https://api.hackertarget.com/reverseiplookup/?q=${ip}`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'FelloVerify/1.0' }
+      });
+      const text = await resp.text();
+      
+      if (text.includes('error') || text.includes('API count exceeded')) {
+        return { status: 'error', ip, error: 'API limit reached', source: 'reverse_ip' };
+      }
+      
+      const domains = text.split('\\n').filter(d => d.trim() && d.includes('.'));
+      const sharedCount = domains.length;
+      
+      return {
+        status: 'found',
+        ip,
+        sharedDomains: sharedCount,
+        isSharedHosting: sharedCount > 50,
+        isDedicatedHosting: sharedCount <= 5,
+        sampleDomains: domains.slice(0, 5),
+        riskLevel: sharedCount > 500 ? 'high' : sharedCount > 50 ? 'medium' : 'low',
+        source: 'reverse_ip'
+      };
+    } catch (e) {
+      return { status: 'error', error: e.message, source: 'reverse_ip' };
     }
   }
 
@@ -895,128 +1085,177 @@ class CustomerVerifyService {
     }
   }
 
-  calculateTrustScore(emailClass, emailVerify, domainVerify, companyEnrich, googlePlaces, phoneValidation, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar) {
+  calculateTrustScore(emailClass, emailVerify, domainVerify, companyEnrich, googlePlaces, phoneValidation, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar, emailAuth, safeBrowsing, certTransparency, reverseIP) {
     let score = 0;
     
     // Email signals (20 pts max)
-    if (emailVerify.isDeliverable) score += 10;
-    if (emailVerify.smtpValid) score += 5;
-    if (emailVerify.mxRecords) score += 5;
+    let emailPts = 0;
+    if (emailVerify.isDeliverable) emailPts += 10;
+    if (emailVerify.smtpValid) emailPts += 5;
+    if (emailVerify.mxRecords) emailPts += 5;
+    score += emailPts;
     
     // Domain infrastructure (10 pts max)
-    if (domainVerify.hasValidSSL) score += 5;
-    if (domainVerify.hasMxRecords) score += 3;
-    if (domainVerify.hasARecord) score += 2;
+    let infraPts = 0;
+    if (domainVerify.hasValidSSL) infraPts += 5;
+    if (domainVerify.hasMxRecords) infraPts += 3;
+    if (domainVerify.hasARecord) infraPts += 2;
+    score += infraPts;
     
     // Website legitimacy (15 pts max)
-    // If domain redirects to a real site, use the active domain's content check
+    let contentPts = 0;
     const contentCheck = domainVerify.activeDomainCheck || domainVerify;
-    if (contentCheck.websiteResponds) score += 5;
-    if (contentCheck.hasRealContent) score += 5;
-    if (domainVerify.isParkedDomain && !domainVerify.redirectedTo) score -= 25; // Only penalize if no redirect
-    if (contentCheck.pageTitle) score += 5;
+    if (contentCheck.websiteResponds) contentPts += 5;
+    if (contentCheck.hasRealContent) contentPts += 5;
+    if (domainVerify.isParkedDomain && !domainVerify.redirectedTo) contentPts -= 25;
+    if (contentCheck.pageTitle) contentPts += 5;
+    score += contentPts;
     
     // Domain age (10 pts max)
+    let agePts = 0;
     if (domainVerify.domainAgeYears !== null) {
-      if (domainVerify.domainAgeYears >= 2) score += 10;
-      else if (domainVerify.domainAgeYears >= 1) score += 7;
-      else if (domainVerify.domainAgeYears >= 0.25) score += 3;
-      else score -= 5;
+      if (domainVerify.domainAgeYears >= 2) agePts += 10;
+      else if (domainVerify.domainAgeYears >= 1) agePts += 7;
+      else if (domainVerify.domainAgeYears >= 0.25) agePts += 3;
+      else agePts -= 5;
     }
+    score += agePts;
     
     // Company enrichment (5 pts)
-    if (companyEnrich.status === 'found') score += 5;
+    let enrichPts = 0;
+    if (companyEnrich.status === 'found') enrichPts += 5;
+    score += enrichPts;
 
-    // Google Places (15 pts max) — only if domain-verified match
+    // Google Places (15 pts max)
+    let placesPts = 0;
     if (googlePlaces && googlePlaces.hasListing && googlePlaces.domainMatch) {
-      score += 5;
-      if (googlePlaces.reviewCount >= 10) score += 5;
-      else if (googlePlaces.reviewCount >= 3) score += 2;
-      if (googlePlaces.rating >= 3.5) score += 3;
-      if (googlePlaces.hasHours) score += 2;
-    } else if (googlePlaces && googlePlaces.hasListing && !googlePlaces.domainMatch) {
-      // Found a listing but website doesn't match — no trust bonus, flag for review
-      score += 0;
+      placesPts += 5;
+      if (googlePlaces.reviewCount >= 10) placesPts += 5;
+      else if (googlePlaces.reviewCount >= 3) placesPts += 2;
+      if (googlePlaces.rating >= 3.5) placesPts += 3;
+      if (googlePlaces.hasHours) placesPts += 2;
     }
+    score += placesPts;
 
     // Phone validation (5 pts max)
+    let phonePts = 0;
     if (phoneValidation && phoneValidation.status !== 'skipped') {
-      if (phoneValidation.isValid && !phoneValidation.isVoIP) score += 5;
-      else if (phoneValidation.isValid && phoneValidation.isVoIP) score += 1;
-      if (phoneValidation.isTollFree) score += 2; // Toll-free is a positive signal
-      if (phoneValidation.riskLevel === 'high') score -= 10;
+      if (phoneValidation.isValid && !phoneValidation.isVoIP) phonePts += 5;
+      else if (phoneValidation.isValid && phoneValidation.isVoIP) phonePts += 1;
+      if (phoneValidation.isTollFree) phonePts += 2;
+      if (phoneValidation.riskLevel === 'high') phonePts -= 10;
     }
+    score += phonePts;
 
     // Search presence (10 pts max)
+    let presencePts = 0;
     if (searchPresence && searchPresence.status === 'found') {
-      score += 5;
-      if (searchPresence.hasLinkedIn) score += 2;
-      if (searchPresence.hasBBB) score += 3;
+      presencePts += 5;
+      if (searchPresence.hasLinkedIn) presencePts += 2;
+      if (searchPresence.hasBBB) presencePts += 3;
     } else if (searchPresence && searchPresence.status === 'limited') {
-      score += 2;
+      presencePts += 2;
     }
+    score += presencePts;
 
     // Business Registration / Web History (12 pts max)
+    let historyPts = 0;
     if (businessRegistration && businessRegistration.status === 'found') {
       if (businessRegistration.companyStatus === 'active') {
-        score += 12;
+        historyPts += 12;
       } else {
-        score += 4;
+        historyPts += 4;
       }
     } else if (businessRegistration && businessRegistration.status === 'error') {
-      // API error (rate limited) — don't penalize, give benefit of the doubt
-      score += 6;
+      historyPts += 6;
     }
+    score += historyPts;
     
-    // Enterprise signals — bonus points for well-known companies
-    let enterpriseBonus = 0;
+    // Email Authentication (8 pts max) — add as a new category
+    let authPts = 0;
+    if (emailAuth && emailAuth.status !== 'error') {
+      if (emailAuth.hasSPF) authPts += 3;
+      if (emailAuth.hasDKIM) authPts += 3;
+      if (emailAuth.hasDMARC) authPts += 2;
+    }
+    score += authPts;
 
-    // Tranco top site (8 pts max)
+    // Safe Browsing (-50 pts penalty if unsafe)
+    let safePts = 0;
+    if (safeBrowsing && safeBrowsing.status === 'unsafe') {
+      score -= 50; // Major penalty
+      safePts = -50;
+    }
+
+    // Certificate Transparency (5 pts max)
+    let certPts = 0;
+    if (certTransparency && certTransparency.status === 'found') {
+      if (certTransparency.yearsActive >= 3) certPts += 5;
+      else if (certTransparency.yearsActive >= 1) certPts += 3;
+      else certPts += 1;
+    }
+    score += certPts;
+
+    // Reverse IP (3 pts max, penalty for high-risk)
+    let ipPts = 0;
+    if (reverseIP && reverseIP.status === 'found') {
+      if (reverseIP.isDedicatedHosting) ipPts += 3;
+      else if (!reverseIP.isSharedHosting) ipPts += 1;
+      if (reverseIP.riskLevel === 'high') { score -= 5; ipPts -= 5; }
+    }
+    score += ipPts;
+
+    // Enterprise signals (bonus)
+    let enterpriseBonus = 0;
     if (trancoRank && trancoRank.status === 'found' && trancoRank.isTopSite) {
       if (trancoRank.rank <= 1000) enterpriseBonus += 8;
       else if (trancoRank.rank <= 10000) enterpriseBonus += 6;
       else if (trancoRank.rank <= 50000) enterpriseBonus += 4;
       else enterpriseBonus += 2;
     }
-
-    // Wikipedia presence (5 pts)
-    if (wikipedia && wikipedia.status === 'found') {
-      enterpriseBonus += 5;
-    }
-
-    // SEC EDGAR public company (5 pts)
-    if (secEdgar && secEdgar.status === 'found' && secEdgar.isPublicCompany) {
-      enterpriseBonus += 5;
-    }
-
-    // SSL Certificate Organization (3 pts)
-    if (domainVerify.sslOrganization) {
-      enterpriseBonus += 3;
-    }
-
-    // Company size from Hunter.io (5 pts max)
+    if (wikipedia && wikipedia.status === 'found') enterpriseBonus += 5;
+    if (secEdgar && secEdgar.status === 'found' && secEdgar.isPublicCompany) enterpriseBonus += 5;
+    if (domainVerify.sslOrganization) enterpriseBonus += 3;
     if (companyEnrich && companyEnrich.status === 'found' && companyEnrich.emailCount) {
       if (companyEnrich.emailCount >= 500) enterpriseBonus += 5;
       else if (companyEnrich.emailCount >= 100) enterpriseBonus += 3;
       else if (companyEnrich.emailCount >= 20) enterpriseBonus += 1;
     }
 
-    // SMTP catch-all compensation — don't penalize large companies for failed email verification
-    // When email verification fails but enterprise signals are strong, compensate
     if (enterpriseBonus >= 8 && emailVerify && !emailVerify.isDeliverable) {
-      // Enterprise companies often block SMTP probing — recover lost email points
-      score += 15; // Recover most of the email verification points
+      emailPts += 15;
+      score += 15;
     }
 
-    // Same-domain redirect — don't lose content points
     if (domainVerify.isSameDomainRedirect && domainVerify.wordCount > 50) {
-      // squareup.com -> squareup.com/us/en is fine
-      if (!domainVerify.hasRealContent) score += 10;
+      if (!domainVerify.hasRealContent) {
+        contentPts += 10;
+        score += 10;
+      }
     }
 
     score += enterpriseBonus;
 
-    return Math.max(0, Math.min(score, 100));
+    const finalScore = Math.max(0, Math.min(score, 100));
+    return {
+      score: finalScore,
+      breakdown: {
+        emailSignals: { earned: emailPts, max: 20 },
+        infrastructure: { earned: infraPts, max: 10 },
+        websiteContent: { earned: contentPts, max: 15 },
+        domainAge: { earned: agePts, max: 10 },
+        companyEnrichment: { earned: enrichPts, max: 5 },
+        googlePlaces: { earned: placesPts, max: 15 },
+        phoneValidation: { earned: phonePts, max: 5 },
+        onlinePresence: { earned: presencePts, max: 10 },
+        webHistory: { earned: historyPts, max: 12 },
+        emailAuth: { earned: authPts, max: 8 },
+        safeBrowsing: { earned: safePts, max: 0, note: 'Penalty only' },
+        certHistory: { earned: certPts, max: 5 },
+        hostingAnalysis: { earned: ipPts, max: 3 },
+        enterpriseBonus: { earned: enterpriseBonus, max: 26, note: 'Bonus only' }
+      }
+    };
   }
 
   getDecision(score) {
@@ -1056,7 +1295,11 @@ class CustomerVerifyService {
           businessRegistration: { status: 'skipped', reason: 'Failed classification' },
           trancoRank: { status: 'skipped', reason: 'Failed classification' },
           wikipedia: { status: 'skipped', reason: 'Failed classification' },
-          secEdgar: { status: 'skipped', reason: 'Failed classification' }
+          secEdgar: { status: 'skipped', reason: 'Failed classification' },
+          emailAuth: { status: 'skipped', reason: 'Failed classification' },
+          safeBrowsing: { status: 'skipped', reason: 'Failed classification' },
+          certTransparency: { status: 'skipped', reason: 'Failed classification' },
+          reverseIP: { status: 'skipped', reason: 'Failed classification' }
         }
       };
       this._saveResult(result);
@@ -1075,18 +1318,36 @@ class CustomerVerifyService {
       }
     } catch (_) {}
 
-    // Run domain verification against the EMAIL domain (to show SSL, DNS, redirect info)
-    // Run all OTHER checks against the ACTIVE domain (the real website)
-    const [emailVerification, domainVerification, companyEnrichment, googlePlaces, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar] = await Promise.all([
+    // Phase 1: Domain verification first (to extract company name)
+    const domainVerification = await this.verifyDomain(domain).catch(e => ({ status: 'error', error: e.message }));
+
+    // Extract company name from page title if not provided
+    let effectiveCompanyName = companyName;
+    if (!effectiveCompanyName && domainVerification.pageTitle) {
+      // Clean page title: remove common suffixes like 'Home -', '| Official Site', etc.
+      let title = domainVerification.pageTitle;
+      title = title.replace(/^(Home|Welcome|Official)\s*[-–|:]/i, '').trim();
+      title = title.replace(/\s*[-–|:]\s*(Home|Official Site|Official Website|Welcome)$/i, '').trim();
+      title = title.replace(/\s*[-–|]\s*$/, '').trim();
+      if (title.length > 2 && title.length < 80) {
+        effectiveCompanyName = title;
+      }
+    }
+
+    // Phase 2: All other checks in parallel (using effectiveCompanyName)
+    const [emailVerification, companyEnrichment, googlePlaces, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar, emailAuth, safeBrowsing, certTransparency, reverseIP] = await Promise.all([
       this.verifyEmail(email).catch(e => ({ status: 'error', error: e.message })),
-      this.verifyDomain(domain).catch(e => ({ status: 'error', error: e.message })),
       this.enrichCompany(activeDomain).catch(e => ({ status: 'error', error: e.message })),
-      this.verifyGooglePlaces(companyName, activeDomain, redirectedFrom ? [redirectedFrom] : []).catch(e => ({ status: 'error', error: e.message })),
-      this.checkSearchPresence(companyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
-      this.verifyBusinessRegistration(companyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.verifyGooglePlaces(effectiveCompanyName, activeDomain, redirectedFrom ? [redirectedFrom] : []).catch(e => ({ status: 'error', error: e.message })),
+      this.checkSearchPresence(effectiveCompanyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.verifyBusinessRegistration(effectiveCompanyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
       this.checkTrancoRank(activeDomain).catch(e => ({ status: 'error', error: e.message })),
-      this.checkWikipedia(companyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
-      this.checkSECEdgar(companyName, activeDomain).catch(e => ({ status: 'error', error: e.message }))
+      this.checkWikipedia(effectiveCompanyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.checkSECEdgar(effectiveCompanyName, activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.checkEmailAuth(activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.checkSafeBrowsing(activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.checkCertTransparency(activeDomain).catch(e => ({ status: 'error', error: e.message })),
+      this.checkReverseIP(activeDomain).catch(e => ({ status: 'error', error: e.message }))
     ]);
 
     // If we followed a redirect, also verify the active domain's website content
@@ -1111,9 +1372,11 @@ class CustomerVerifyService {
     const phoneValidation = this.validatePhone(phone);
 
     // Use enriched company name for display if we didn't have one
-    const resolvedCompanyName = companyName || companyEnrichment?.companyName || null;
+    const resolvedCompanyName = effectiveCompanyName || companyEnrichment?.companyName || null;
     
-    const trustScore = this.calculateTrustScore(emailClassification, emailVerification, domainVerification, companyEnrichment, googlePlaces, phoneValidation, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar);
+    const scoreResult = this.calculateTrustScore(emailClassification, emailVerification, domainVerification, companyEnrichment, googlePlaces, phoneValidation, searchPresence, businessRegistration, trancoRank, wikipedia, secEdgar, emailAuth, safeBrowsing, certTransparency, reverseIP);
+    const trustScore = scoreResult.score;
+    const scoreBreakdown = scoreResult.breakdown;
     const decision = this.getDecision(trustScore);
     
     const result = {
@@ -1122,7 +1385,9 @@ class CustomerVerifyService {
       activeDomain: redirectedFrom ? activeDomain : undefined,
       phone,
       companyName: resolvedCompanyName,
+      extractedCompanyName: (!companyName && effectiveCompanyName) ? effectiveCompanyName : undefined,
       trustScore,
+      scoreBreakdown,
       decision,
       verifiedAt: new Date().toISOString(),
       checks: {
@@ -1136,9 +1401,30 @@ class CustomerVerifyService {
         businessRegistration,
         trancoRank,
         wikipedia,
-        secEdgar
+        secEdgar,
+        emailAuth,
+        safeBrowsing,
+        certTransparency,
+        reverseIP
       }
     };
+    
+    // Mark check types for UI grouping
+    if (result.checks.trancoRank) result.checks.trancoRank.checkType = 'enterprise';
+    if (result.checks.wikipedia) result.checks.wikipedia.checkType = 'enterprise';
+    if (result.checks.secEdgar) result.checks.secEdgar.checkType = 'enterprise';
+    if (result.checks.googlePlaces) result.checks.googlePlaces.checkType = 'core';
+    if (result.checks.emailClassification) result.checks.emailClassification.checkType = 'core';
+    if (result.checks.emailVerification) result.checks.emailVerification.checkType = 'core';
+    if (result.checks.domainVerification) result.checks.domainVerification.checkType = 'core';
+    if (result.checks.companyEnrichment) result.checks.companyEnrichment.checkType = 'core';
+    if (result.checks.searchPresence) result.checks.searchPresence.checkType = 'core';
+    if (result.checks.businessRegistration) result.checks.businessRegistration.checkType = 'core';
+    if (result.checks.phoneValidation) result.checks.phoneValidation.checkType = 'core';
+    if (result.checks.emailAuth) result.checks.emailAuth.checkType = 'core';
+    if (result.checks.safeBrowsing) result.checks.safeBrowsing.checkType = 'core';
+    if (result.checks.certTransparency) result.checks.certTransparency.checkType = 'core';
+    if (result.checks.reverseIP) result.checks.reverseIP.checkType = 'core';
     
     this._saveResult(result);
     console.log(`[CustomerVerify] ${email} → Score: ${trustScore}, Decision: ${decision}${redirectedFrom ? ` (via ${activeDomain})` : ''}`);
