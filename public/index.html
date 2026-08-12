@@ -912,6 +912,42 @@
       coreGrid.appendChild(card);
     });
 
+    // Email Online Search card
+    const es = c.emailSearch || {};
+    if (es.status && es.status !== 'skipped') {
+      const esCard = document.createElement('div');
+      let esStatus = es.status === 'found' && es.hasOrgAssociation ? 'pass' : es.status === 'found' ? 'warn' : es.status === 'error' ? 'warn' : 'neutral';
+      esCard.className = 'check-card check-' + esStatus;
+      esCard.style.animationDelay = '0.20s';
+      let esBody = '';
+      if (es.status === 'found') {
+        esBody += row('Mentions Found', es.mentionCount);
+        esBody += row('Org Association', es.hasOrgAssociation ? '\u2705 Yes' : 'No');
+        if (es.organizations && es.organizations.length > 0) {
+          esBody += '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">';
+          esBody += '<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;">Organizations</div>';
+          es.organizations.forEach(org => {
+            esBody += `<div style="margin-bottom:4px;font-size:12px;">\ud83c\udfe2 <a href="${esc(org.url)}" target="_blank" style="color:var(--blue);font-weight:600;">${esc(org.title || org.domain || 'Link')}</a></div>`;
+          });
+          esBody += '</div>';
+        }
+        if (es.mentions && es.mentions.length > 0) {
+          esBody += '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">';
+          esBody += '<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;">Found On</div>';
+          es.mentions.slice(0, 5).forEach(m => {
+            esBody += `<div style="margin-bottom:4px;font-size:11px;"><a href="${esc(m.url)}" target="_blank" style="color:var(--blue);">${esc(m.title || m.domain || 'Link')}</a><div style="font-size:9px;color:var(--muted);word-break:break-all;">${esc(m.domain || '')}</div></div>`;
+          });
+          esBody += '</div>';
+        }
+      } else if (es.status === 'error') {
+        esBody = `<div class="check-skip-msg">\u26a0\ufe0f ${es.error || 'Search failed'}</div>`;
+      } else {
+        esBody = '<div class="check-skip-msg">Email not found in web search results</div>';
+      }
+      esCard.innerHTML = `<div class="check-head"><span class="check-icon">\ud83d\udd0e</span><span class="check-name">Email Search</span><span class="check-status">${statusIcon[esStatus]}</span></div><div class="check-body">${esBody}</div>`;
+      coreGrid.appendChild(esCard);
+    }
+
     // Website Content Analysis card
     if (d.status && d.status !== 'skipped') {
       const wsCard = document.createElement('div');

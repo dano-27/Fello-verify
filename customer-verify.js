@@ -80,6 +80,103 @@ class CustomerVerifyService {
     };
   }
 
+  // ── Email Online Search ─────────────────────────────────────────────
+  // Search for an email address across the web to find organizational associations
+  async searchEmailOnline(email) {
+    const results = { status: 'not_found', mentions: [], mentionCount: 0, organizations: [], source: 'web_search' };
+    try {
+      // Strategy: Search multiple free sources for the email
+      const searchPromises = [];
+
+      // 1. Google Custom Search (if API key available)
+      if (this.googleApiKey) {
+        searchPromises.push(
+          fetch(`https://customsearch.googleapis.com/customsearch/v1?key=${this.googleApiKey}&cx=a0ce64bce02754f28&q=%22${encodeURIComponent(email)}%22&num=5`, {
+            signal: AbortSignal.timeout(8000)
+          }).then(r => r.json()).then(data => {
+            if (data.searchInformation && parseInt(data.searchInformation.totalResults) > 0) {
+              return (data.items || []).map(item => ({
+                title: item.title,
+                url: item.link,
+                snippet: item.snippet,
+                source: 'google'
+              }));
+            }
+            return [];
+          }).catch(() => [])
+        );
+      }
+
+      // 2. DuckDuckGo HTML search (free, no API key)
+      searchPromises.push(
+        fetch(`https://html.duckduckgo.com/html/?q=%22${encodeURIComponent(email)}%22`, {
+          signal: AbortSignal.timeout(8000),
+          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+        }).then(r => r.text()).then(html => {
+          const mentions = [];
+          // Extract result titles and URLs
+          const resultBlocks = html.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/gi) || [];
+          for (const block of resultBlocks.slice(0, 5)) {
+            const urlMatch = block.match(/href="([^"]+)"/);
+            const titleMatch = block.match(/>([^<]*)<\/a>/);
+            if (urlMatch && titleMatch) {
+              let url = urlMatch[1];
+              // DuckDuckGo wraps URLs in a redirect
+              const directUrl = url.match(/uddg=([^&]+)/);
+              if (directUrl) url = decodeURIComponent(directUrl[1]);
+              mentions.push({
+                title: titleMatch[1].replace(/<[^>]+>/g, '').trim(),
+                url: url,
+                source: 'duckduckgo'
+              });
+            }
+          }
+          return mentions;
+        }).catch(() => [])
+      );
+
+      // 3. Check if email appears on a company website (if company name provided)
+      // This is handled by the caller passing results back
+
+      const searchResults = await Promise.all(searchPromises);
+      const allMentions = searchResults.flat();
+
+      // Deduplicate by URL domain
+      const seen = new Set();
+      const uniqueMentions = [];
+      for (const m of allMentions) {
+        try {
+          const domain = new URL(m.url).hostname.replace(/^www\./, '');
+          if (!seen.has(domain)) {
+            seen.add(domain);
+            uniqueMentions.push({ ...m, domain });
+          }
+        } catch (_) {
+          uniqueMentions.push(m);
+        }
+      }
+
+      // Identify organizational associations
+      const orgKeywords = ['org', 'edu', 'gov', 'church', 'foundation', 'association', 'council', 'society', 'chamber', 'nonprofit', 'charity', 'club', 'committee', 'board', 'volunteer', 'community', 'event'];
+      const organizations = uniqueMentions.filter(m => {
+        const urlLower = (m.url || '').toLowerCase();
+        const titleLower = (m.title || '').toLowerCase();
+        return orgKeywords.some(k => urlLower.includes(k) || titleLower.includes(k)) ||
+               urlLower.match(/\.(org|edu|gov)(\/|$)/);
+      });
+
+      results.mentions = uniqueMentions.slice(0, 10);
+      results.mentionCount = uniqueMentions.length;
+      results.organizations = organizations.slice(0, 5);
+      results.hasOrgAssociation = organizations.length > 0;
+      results.status = uniqueMentions.length > 0 ? 'found' : 'not_found';
+
+      return results;
+    } catch (e) {
+      return { status: 'error', error: e.message, mentions: [], mentionCount: 0, organizations: [], source: 'web_search' };
+    }
+  }
+
   async verifyDomain(domain) {
     const results = {
       status: 'pass',
@@ -1274,32 +1371,103 @@ class CustomerVerifyService {
     
     const emailClassification = this.classifyEmail(email);
     
-    if (emailClassification.status === 'fail') {
+    // Disposable emails are still instant-rejected
+    if (emailClassification.type === 'disposable') {
       const result = {
-        email,
-        domain,
-        phone,
-        companyName,
+        email, domain, phone, companyName,
         trustScore: 0,
         decision: 'rejected',
-        reason: `${emailClassification.type} email provider`,
+        reason: 'disposable email provider',
         verifiedAt: new Date().toISOString(),
         checks: {
           emailClassification,
-          emailVerification: { status: 'skipped', reason: 'Failed classification' },
-          domainVerification: { status: 'skipped', reason: 'Failed classification' },
-          companyEnrichment: { status: 'skipped', reason: 'Failed classification' },
-          googlePlaces: { status: 'skipped', reason: 'Failed classification' },
-          phoneValidation: { status: 'skipped', reason: 'Failed classification' },
-          searchPresence: { status: 'skipped', reason: 'Failed classification' },
-          businessRegistration: { status: 'skipped', reason: 'Failed classification' },
-          trancoRank: { status: 'skipped', reason: 'Failed classification' },
-          wikipedia: { status: 'skipped', reason: 'Failed classification' },
-          secEdgar: { status: 'skipped', reason: 'Failed classification' },
-          emailAuth: { status: 'skipped', reason: 'Failed classification' },
-          safeBrowsing: { status: 'skipped', reason: 'Failed classification' },
-          certTransparency: { status: 'skipped', reason: 'Failed classification' },
-          reverseIP: { status: 'skipped', reason: 'Failed classification' }
+          emailVerification: { status: 'skipped', reason: 'Disposable email' },
+          domainVerification: { status: 'skipped', reason: 'Disposable email' },
+          emailSearch: { status: 'skipped', reason: 'Disposable email' },
+          companyEnrichment: { status: 'skipped', reason: 'Disposable email' },
+          googlePlaces: { status: 'skipped', reason: 'Disposable email' },
+          phoneValidation: { status: 'skipped', reason: 'Disposable email' },
+          searchPresence: { status: 'skipped', reason: 'Disposable email' },
+          businessRegistration: { status: 'skipped', reason: 'Disposable email' },
+          trancoRank: { status: 'skipped', reason: 'Disposable email' },
+          wikipedia: { status: 'skipped', reason: 'Disposable email' },
+          secEdgar: { status: 'skipped', reason: 'Disposable email' },
+          emailAuth: { status: 'skipped', reason: 'Disposable email' },
+          safeBrowsing: { status: 'skipped', reason: 'Disposable email' },
+          certTransparency: { status: 'skipped', reason: 'Disposable email' },
+          reverseIP: { status: 'skipped', reason: 'Disposable email' }
+        }
+      };
+      this._saveResult(result);
+      return result;
+    }
+
+    // Free email (Gmail, Yahoo, etc.) — search for the email online before deciding
+    if (emailClassification.type === 'free') {
+      console.log(`[CustomerVerify] Free email detected, searching online for associations...`);
+      const emailSearch = await this.searchEmailOnline(email).catch(e => ({ status: 'error', error: e.message, mentions: [], organizations: [] }));
+      const phoneValidation = this.validatePhone(phone);
+
+      // If the email is found on organizational websites, don't reject — flag for review
+      if (emailSearch.status === 'found' && emailSearch.mentionCount > 0) {
+        let freeScore = 25; // Base score for free email
+        if (emailSearch.hasOrgAssociation) freeScore += 20; // Found on org website
+        freeScore += Math.min(emailSearch.mentionCount * 3, 15); // More mentions = more trust
+        if (phoneValidation && phoneValidation.isValid && !phoneValidation.isVoIP) freeScore += 5;
+
+        const result = {
+          email, domain, phone, companyName,
+          trustScore: Math.min(freeScore, 70), // Cap at 70 for free emails (always needs review)
+          decision: 'needs_review',
+          reason: `Free email (${domain}) — found ${emailSearch.mentionCount} online mention(s)${emailSearch.hasOrgAssociation ? ', associated with organization(s)' : ''}`,
+          verifiedAt: new Date().toISOString(),
+          checks: {
+            emailClassification,
+            emailSearch,
+            phoneValidation,
+            emailVerification: { status: 'skipped', reason: 'Free email — online search used instead' },
+            domainVerification: { status: 'skipped', reason: 'Free email provider' },
+            companyEnrichment: { status: 'skipped', reason: 'Free email provider' },
+            googlePlaces: { status: 'skipped', reason: 'Free email provider' },
+            searchPresence: { status: 'skipped', reason: 'Free email provider' },
+            businessRegistration: { status: 'skipped', reason: 'Free email provider' },
+            trancoRank: { status: 'skipped', reason: 'Free email provider' },
+            wikipedia: { status: 'skipped', reason: 'Free email provider' },
+            secEdgar: { status: 'skipped', reason: 'Free email provider' },
+            emailAuth: { status: 'skipped', reason: 'Free email provider' },
+            safeBrowsing: { status: 'skipped', reason: 'Free email provider' },
+            certTransparency: { status: 'skipped', reason: 'Free email provider' },
+            reverseIP: { status: 'skipped', reason: 'Free email provider' }
+          }
+        };
+        this._saveResult(result);
+        return result;
+      }
+
+      // No mentions found — reject but show the search was done
+      const result = {
+        email, domain, phone, companyName,
+        trustScore: 10,
+        decision: 'rejected',
+        reason: `Free email (${domain}) — no online presence found`,
+        verifiedAt: new Date().toISOString(),
+        checks: {
+          emailClassification,
+          emailSearch,
+          phoneValidation,
+          emailVerification: { status: 'skipped', reason: 'Free email provider' },
+          domainVerification: { status: 'skipped', reason: 'Free email provider' },
+          companyEnrichment: { status: 'skipped', reason: 'Free email provider' },
+          googlePlaces: { status: 'skipped', reason: 'Free email provider' },
+          searchPresence: { status: 'skipped', reason: 'Free email provider' },
+          businessRegistration: { status: 'skipped', reason: 'Free email provider' },
+          trancoRank: { status: 'skipped', reason: 'Free email provider' },
+          wikipedia: { status: 'skipped', reason: 'Free email provider' },
+          secEdgar: { status: 'skipped', reason: 'Free email provider' },
+          emailAuth: { status: 'skipped', reason: 'Free email provider' },
+          safeBrowsing: { status: 'skipped', reason: 'Free email provider' },
+          certTransparency: { status: 'skipped', reason: 'Free email provider' },
+          reverseIP: { status: 'skipped', reason: 'Free email provider' }
         }
       };
       this._saveResult(result);
